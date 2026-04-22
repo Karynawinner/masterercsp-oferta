@@ -356,20 +356,7 @@ a.btninfomaster i { margin-left: 8px; }
   text-align: center;
 }
 
-/* =========================================
-   DEMO BADGE (to indicate this is a mockup)
-   ========================================= */
-.demo-banner {
-  background: #e35104;
-  color: white;
-  text-align: center;
-  padding: 8px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  position: relative;
-  z-index: 2000;
-}
+
 
 @media (max-width: 768px) {
   .main-navigation { display: none; }
@@ -380,9 +367,6 @@ a.btninfomaster i { margin-left: 8px; }
 </style>
 </head>
 <body>
-
-<!-- DEMO NOTICE -->
-<div class="demo-banner">⚠️ VISUALIZACIÓN / MOCKUP — no es la página real del sitio</div>
 
 <!-- ===== HEADER ===== -->
 <div class="site-header-wrapper">
@@ -926,66 +910,18 @@ a.btninfomaster i { margin-left: 8px; }
 </footer>
 
 <script>
-// ── Airtable key management (localStorage, never in source code) ──────
-function getAirtableKey() {
-  try { return localStorage.getItem('ercsp_api_key') || ''; }
-  catch(e) { return ''; }
-}
-function getAirtableBaseId() {
-  try { return localStorage.getItem('ercsp_base_id') || ''; }
-  catch(e) { return ''; }
-}
-function saveAirtableConfig(key, baseId) {
-  try {
-    localStorage.setItem('ercsp_api_key', key);
-    localStorage.setItem('ercsp_base_id', baseId);
-  } catch(e) { alert('No se pudo guardar la configuración en este navegador.'); }
+// ── Netlify Function proxy ───────────────────────────────────────────
+async function airtableCreate(table, fields) {
+  const res = await fetch('/.netlify/functions/airtable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ table, fields })
+  });
+  if (!res.ok) throw new Error('Airtable error: ' + res.status);
+  return await res.json();
 }
 
-function openSettings() {
-  document.getElementById('settings-overlay').style.display = 'flex';
-  document.getElementById('settings-api-key').value  = getAirtableKey();
-  document.getElementById('settings-base-id').value  = getAirtableBaseId();
-  updateSettingsStatus();
-}
 
-function closeSettings() {
-  document.getElementById('settings-overlay').style.display = 'none';
-}
-
-function saveSettings() {
-  const key    = document.getElementById('settings-api-key').value.trim();
-  const baseId = document.getElementById('settings-base-id').value.trim();
-  if (!key || !baseId) {
-    alert('Por favor, introduce tanto el API Token como el Base ID.');
-    return;
-  }
-  saveAirtableConfig(key, baseId);
-  updateSettingsStatus();
-  // Mostrar confirmación
-  const btn = document.getElementById('settings-save-btn');
-  btn.textContent = '✓ Guardado';
-  btn.style.background = '#4caf50';
-  setTimeout(() => { btn.textContent = 'Guardar'; btn.style.background = '#0059a2'; }, 2000);
-}
-
-function updateSettingsStatus() {
-  const key    = getAirtableKey();
-  const baseId = getAirtableBaseId();
-  const status = document.getElementById('settings-status');
-  if (key && baseId) {
-    status.textContent  = '✓ Airtable configurado correctamente';
-    status.style.color  = '#4caf50';
-  } else {
-    status.textContent  = '⚠ Airtable no configurado — los formularios funcionan en modo demo';
-    status.style.color  = '#e35104';
-  }
-}
-
-// Activar ajustes con combinación de teclas: Ctrl+Shift+A
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'A') openSettings();
-});
 
 // ── Tab switching ─────────────────────────────────────────────────────
 document.querySelectorAll('.sp-tab__nav-link').forEach(label => {
@@ -1362,9 +1298,7 @@ async function submitForm() {
   }
 
   // ── Airtable credentials ─────────────────────────────────────────────
-  const AIRTABLE_API_KEY = getAirtableKey();
-  const AIRTABLE_BASE_ID = getAirtableBaseId();
-  const isDemoMode = !AIRTABLE_API_KEY || !AIRTABLE_BASE_ID;
+  const isDemoMode = false;
   // ─────────────────────────────────────────────────────────────────────
 
   const itinerarioLabels = { juristas:'⚖️ Juristas', economistas:'📊 Economistas', ingenieros:'🏛️ Ingenieros y Politólogos' };
@@ -1387,7 +1321,7 @@ async function submitForm() {
   document.getElementById('confirm-contact').innerHTML     = '📧 ' + studentData['Email'] + ' &nbsp;·&nbsp; 📞 ' + studentData['Teléfono'];
   document.getElementById('confirm-itinerario').textContent= itinerarioLabels2[selectedItinerario] || studentData['Itinerario'];
   document.getElementById('confirm-subjects').innerHTML    = selectedSubjects.map(s => '· ' + s).join('<br>');
-  document.getElementById('confirm-demo-note').textContent = isDemoMode ? 'Modo demo — configura Airtable con Ctrl+Shift+A' : '';
+  document.getElementById('confirm-demo-note').textContent = '';
   btn.textContent = 'Confirmo mi elección de asignaturas';
   btn.disabled    = false;
   const overlay = document.getElementById('confirm-overlay');
@@ -1396,38 +1330,24 @@ async function submitForm() {
   document.body.style.overflow = 'hidden';
   requestAnimationFrame(() => { modal.style.transform = 'scale(1)'; modal.style.opacity = '1'; });
 
-  // Отправить в Airtable в фоне (не блокирует попап)
-  if (!isDemoMode) {
-    (async () => {
-      try {
-        const resStudent = await fetch(
-          `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Estudiantes`,
-          { method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + AIRTABLE_API_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fields: studentData }) }
-        );
-        if (!resStudent.ok) throw new Error('Error ' + resStudent.status);
-        const studentRecord = await resStudent.json();
-        const studentId = studentRecord.id;
-        for (const subj of selectedSubjects) {
-          const matchName = subj.match(/^(.+?)\s*\(/);
-          const matchEcts = subj.match(/\((\d+(?:[,\.]\d+)?)\s*ECTS\)/);
-          const matchTipo = subj.match(/\[(.+?)\]/);
-          await fetch(
-            `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Asignaturas`,
-            { method: 'POST',
-              headers: { 'Authorization': 'Bearer ' + AIRTABLE_API_KEY, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fields: {
-                'Asignatura': matchName ? matchName[1].trim() : subj,
-                'ECTS':       matchEcts ? parseFloat(matchEcts[1].replace(',', '.')) : 0,
-                'Tipo':       matchTipo ? matchTipo[1] : 'Optativa',
-                'Estudiantes': [studentId],
-              }}) }
-          );
-        }
-      } catch(err) { console.error('Airtable error:', err); }
-    })();
-  }
+  // Отправить через Netlify Function
+  (async () => {
+    try {
+      const studentRecord = await airtableCreate('Estudiantes', studentData);
+      const studentId = studentRecord.id;
+      for (const subj of selectedSubjects) {
+        const matchName = subj.match(/^(.+?)\s*\(/);
+        const matchEcts = subj.match(/\((\d+(?:[,\.]\d+)?)\s*ECTS\)/);
+        const matchTipo = subj.match(/\[(.+?)\]/);
+        await airtableCreate('Asignaturas', {
+          'Asignatura': matchName ? matchName[1].trim() : subj,
+          'ECTS':       matchEcts ? parseFloat(matchEcts[1].replace(',', '.')) : 0,
+          'Tipo':       matchTipo ? matchTipo[1] : 'Optativa',
+          'Estudiantes': [studentId],
+        });
+      }
+    } catch(err) { console.error('Airtable error:', err); }
+  })();
 }
 
 // ── Bilingüe data ─────────────────────────────────────────────────────
@@ -1717,9 +1637,7 @@ async function submitBilForm() {
   }
 
   // ── Airtable credentials ─────────────────────────────────────────────
-  const AIRTABLE_API_KEY = getAirtableKey();
-  const AIRTABLE_BASE_ID = getAirtableBaseId();
-  const isDemoMode = !AIRTABLE_API_KEY || !AIRTABLE_BASE_ID;
+  const isDemoMode = false;
   // ─────────────────────────────────────────────────────────────────────
 
   const studentData = {
@@ -1739,7 +1657,7 @@ async function submitBilForm() {
   document.getElementById('confirm-contact').innerHTML     = '📧 ' + studentData['Email'] + ' &nbsp;·&nbsp; 📞 ' + studentData['Teléfono'];
   document.getElementById('confirm-itinerario').textContent= studentData['Itinerario'];
   document.getElementById('confirm-subjects').innerHTML    = selectedSubjects.map(s => '· ' + s).join('<br>');
-  document.getElementById('confirm-demo-note').textContent = isDemoMode ? 'Modo demo — configura Airtable con Ctrl+Shift+A' : '';
+  document.getElementById('confirm-demo-note').textContent = '';
   btn.textContent = 'Confirmo mi elección de asignaturas'; btn.disabled = false;
   const overlay = document.getElementById('confirm-overlay');
   const modal   = document.getElementById('confirm-modal');
@@ -1747,38 +1665,24 @@ async function submitBilForm() {
   document.body.style.overflow = 'hidden';
   requestAnimationFrame(() => { modal.style.transform = 'scale(1)'; modal.style.opacity = '1'; });
 
-  // Отправить в Airtable в фоне
-  if (!isDemoMode) {
-    (async () => {
-      try {
-        const resStudent = await fetch(
-          `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Estudiantes`,
-          { method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + AIRTABLE_API_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fields: studentData }) }
-        );
-        if (!resStudent.ok) throw new Error('Error ' + resStudent.status);
-        const studentRecord = await resStudent.json();
-        const studentId = studentRecord.id;
-        for (const subj of selectedSubjects) {
-          const matchName = subj.match(/^(.+?)\s*\(/);
-          const matchEcts = subj.match(/\((\d+(?:[,\.]\d+)?)\s*ECTS\)/);
-          const matchTipo = subj.match(/\[(.+?)\]/);
-          await fetch(
-            `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Asignaturas`,
-            { method: 'POST',
-              headers: { 'Authorization': 'Bearer ' + AIRTABLE_API_KEY, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fields: {
-                'Asignatura': matchName ? matchName[1].trim() : subj,
-                'ECTS':       matchEcts ? parseFloat(matchEcts[1].replace(',', '.')) : 0,
-                'Tipo':       matchTipo ? matchTipo[1] : 'Optativa',
-                'Estudiantes': [studentId],
-              }}) }
-          );
-        }
-      } catch(err) { console.error('Airtable error:', err); }
-    })();
-  }
+  // Отправить через Netlify Function
+  (async () => {
+    try {
+      const studentRecord = await airtableCreate('Estudiantes', studentData);
+      const studentId = studentRecord.id;
+      for (const subj of selectedSubjects) {
+        const matchName = subj.match(/^(.+?)\s*\(/);
+        const matchEcts = subj.match(/\((\d+(?:[,\.]\d+)?)\s*ECTS\)/);
+        const matchTipo = subj.match(/\[(.+?)\]/);
+        await airtableCreate('Asignaturas', {
+          'Asignatura': matchName ? matchName[1].trim() : subj,
+          'ECTS':       matchEcts ? parseFloat(matchEcts[1].replace(',', '.')) : 0,
+          'Tipo':       matchTipo ? matchTipo[1] : 'Optativa',
+          'Estudiantes': [studentId],
+        });
+      }
+    } catch(err) { console.error('Airtable error:', err); }
+  })();
 }
 
 function closeConfirm() {
@@ -1797,35 +1701,5 @@ document.getElementById('confirm-overlay').addEventListener('click', function(e)
   if (e.target === this) closeConfirm();
 });
 </script>
-<!-- ===== ПАНЕЛЬ НАСТРОЕК (Ctrl+Shift+A) ===== -->
-<div id="settings-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; padding:20px;">
-  <div style="background:white; border-radius:10px; padding:36px 40px; max-width:520px; width:100%; position:relative; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-
-    <button onclick="closeSettings()" style="position:absolute; top:14px; right:16px; background:none; border:none; font-size:1.3rem; color:#aaa; cursor:pointer;">✕</button>
-
-    <h3 style="font-family:Montserrat,sans-serif; font-size:1rem; font-weight:700; color:#0059a2; margin:0 0 6px 0;">⚙️ Configuración Airtable</h3>
-    <p style="font-size:0.8rem; color:#888; margin:0 0 24px 0;">Esta página no es visible para los estudiantes. Accede con <strong>Ctrl+Shift+A</strong>. Los datos se guardan solo en este navegador.</p>
-
-    <div style="margin-bottom:16px;">
-      <label style="display:block; font-size:0.8rem; font-weight:600; color:#444; margin-bottom:5px;">API Token de Airtable</label>
-      <input id="settings-api-key" type="password" placeholder="patXXXXXXXX.XXXXXXXX..." style="width:100%; padding:10px 12px; border:1px solid #c8d8ea; border-radius:3px; font-family:monospace; font-size:0.85rem; color:#333; outline:none;">
-      <p style="font-size:0.72rem; color:#aaa; margin:4px 0 0 0;">Empieza por <code>pat...</code> · Se guarda encriptado en tu navegador</p>
-    </div>
-
-    <div style="margin-bottom:24px;">
-      <label style="display:block; font-size:0.8rem; font-weight:600; color:#444; margin-bottom:5px;">Base ID de Airtable</label>
-      <input id="settings-base-id" type="text" placeholder="appXXXXXXXXXXXXXX" style="width:100%; padding:10px 12px; border:1px solid #c8d8ea; border-radius:3px; font-family:monospace; font-size:0.85rem; color:#333; outline:none;">
-      <p style="font-size:0.72rem; color:#aaa; margin:4px 0 0 0;">Encuéntralo en la URL de tu base: airtable.com/<strong>appXXXX</strong>/...</p>
-    </div>
-
-    <div id="settings-status" style="font-size:0.82rem; font-weight:600; margin-bottom:20px;"></div>
-
-    <div style="display:flex; gap:12px; justify-content:flex-end;">
-      <button onclick="closeSettings()" style="background:none; border:1px solid #c8d8ea; color:#555; padding:10px 20px; font-family:Montserrat,sans-serif; font-size:0.85rem; border-radius:3px; cursor:pointer;">Cancelar</button>
-      <button id="settings-save-btn" onclick="saveSettings()" style="background:#0059a2; color:white; border:none; padding:10px 24px; font-family:Montserrat,sans-serif; font-size:0.85rem; font-weight:700; border-radius:3px; cursor:pointer; transition:background 0.2s;">Guardar</button>
-    </div>
-
-  </div>
-</div>
 
 </body></html>
