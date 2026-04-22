@@ -1421,7 +1421,7 @@ async function submitForm() {
                 'Asignatura': matchName ? matchName[1].trim() : subj,
                 'ECTS':       matchEcts ? parseFloat(matchEcts[1].replace(',', '.')) : 0,
                 'Tipo':       matchTipo ? matchTipo[1] : 'Optativa',
-                'Estudiante': [studentId],
+                'Estudiantes': [studentId],
               }}) }
           );
         }
@@ -1772,7 +1772,7 @@ async function submitBilForm() {
                 'Asignatura': matchName ? matchName[1].trim() : subj,
                 'ECTS':       matchEcts ? parseFloat(matchEcts[1].replace(',', '.')) : 0,
                 'Tipo':       matchTipo ? matchTipo[1] : 'Optativa',
-                'Estudiante': [studentId],
+                'Estudiantes': [studentId],
               }}) }
           );
         }
